@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mindmap Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080d14; font-family: 'JetBrains Mono', 'Fira Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
+  #canvas { width: 100%; height: 100%; cursor: default; }
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: rgba(8,13,20,0.93); border-bottom: 1px solid rgba(0,229,255,0.15); display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 10; backdrop-filter: blur(12px); }
+  #title { color: #00e5ff; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-right: 8px; }
+  .tbtn { background: transparent; border: 1px solid #444; color: #888; padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+  .tbtn:hover { border-color: #00e5ff; color: #00e5ff; }
+  #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.15); font-size: 10px; letter-spacing: 1.5px; pointer-events: none; white-space: nowrap; }
+  #ctx { position: fixed; z-index: 200; background: #0d1520; border: 1px solid rgba(0,229,255,0.25); border-radius: 8px; overflow: hidden; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+  #ctx-label { padding: 10px 14px; border-bottom: 1px solid rgba(0,229,255,0.1); font-size: 11px; font-weight: 700; letter-spacing: 1px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-item { padding: 10px 14px; color: #e0e0e0; font-size: 11px; cursor: pointer; letter-spacing: 0.5px; }
+  .ctx-item:hover { background: rgba(0,229,255,0.08); }
+  #minimap { position: fixed; bottom: 36px; right: 16px; background: rgba(8,13,20,0.9); border: 1px solid rgba(0,229,255,0.2); border-radius: 8px; padding: 6px; }
+  #minimap-label { color: rgba(0,229,255,0.3); font-size: 9px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="title">◈ MINDMAP</span>
+  <button class="tbtn" onclick="fitAll()">⌂ Fit</button>
+  <button class="tbtn" onclick="zoomIn()">+</button>
+  <span id="zoomlabel" style="color:#555;font-size:10px;min-width:36px;text-align:center;">100%</span>
+  <button class="tbtn" onclick="zoomOut()">−</button>
+</div>
+<svg id="canvas"></svg>
+<div id="hint">DRAG to pan · SCROLL to zoom · RIGHT-CLICK node to search</div>
+<div id="ctx">
+  <div id="ctx-label"></div>
+  <div class="ctx-item" id="ctx-google">🔍 Google Search</div>
+  <div class="ctx-item" id="ctx-news">📰 Google News</div>
+  <div class="ctx-item" id="ctx-wiki">📖 Wikipedia</div>
+  <div class="ctx-item" id="ctx-yt">▶ YouTube</div>
+</div>
+<div id="minimap">
+  <svg id="mm-svg" width="160" height="100"></svg>
+  <div id="minimap-label">MINIMAP</div>
+</div>
+<script>
+const NODES = [{"id":"1","text":"Supreme Court Tariffs Ruling","x":600,"y":460,"color":"#00e5ff","parentId":null,"orderedChildren":false},{"id":"2","text":"Court Decision Details","x":780.5389378962805,"y":232.96158250136887,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"3","text":"6-3 majority struck down tariffs","x":1005.0563028960581,"y":-88.86701574207864,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"4","text":"Chief Justice Roberts delivered opinion","x":1323.4131231488063,"y":-32.5543162872406,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"5","text":"Thomas, Alito, Kavanaugh dissented","x":781.5572522665135,"y":61.47746829485044,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"6","text":"Rare rebuke of Trump presidency","x":1410.6439687876561,"y":89.12562775635838,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"7","text":"Legal Basis and Authority","x":957.8941400225282,"y":465.9935187768894,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"8","text":"IEEPA does not authorize tariffs","x":1289.231311928917,"y":267.6960506017904,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"9","text":"No historical precedent for IEEPA tariffs","x":1447.867692772578,"y":363.9703758256124,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"10","text":"Constitution assigns tariff power to Congress","x":1427.8892968496132,"y":480.1117196671208,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"11","text":"Major questions doctrine applied","x":1232.5728281781278,"y":586.4826762804302,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"12","text":"Affected Tariffs","x":730.0000000000001,"y":685.166604983954,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"13","text":"Reciprocal tariffs 10-50% globally","x":1076.4675897341176,"y":705.0290715785769,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"14","text":"Fentanyl-related duties on Mexico/Canada/China","x":1039.5492074776148,"y":787.8977644578991,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"15","text":"Over 60% of 2025 tariff revenue","x":1034.2903999948182,"y":849.9641155632464,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"16","text":"Steel and aluminum tariffs unaffected","x":716.1484465980807,"y":875.4642188895301,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"17","text":"Economic Implications","x":386.0907371235474,"y":601.2573421075014,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"18","text":"Potential billions in refunds","x":453.8839595174722,"y":797.548474789967,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"19","text":"Market volatility and dollar strength","x":245.6231836970417,"y":867.944671893915,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"20","text":"$3 trillion deficit impact projection","x":118.49616108415934,"y":793.891283234789,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"21","text":"Global trade deal disruptions","x":-90.23642610984204,"y":707.0269111708737,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"22","text":"Political Impact","x":257.6402493542097,"y":452.512749941292,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"23","text":"Major blow to signature policy","x":-108.49073268539436,"y":580.489157503541,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"24","text":"Congressional Republicans showed rare opposition","x":-147.9757131577535,"y":456.1376445595632,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"25","text":"Sets limits on executive power","x":-199.91954255746242,"y":355.9790174564269,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"26","text":"Midterm election implications","x":-90.51017635472608,"y":233.62534410474547,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"27","text":"Administration Response","x":320.2549988258357,"y":244.19245758943123,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"28","text":"Plans to reimpose using other laws","x":-151.0083591834791,"y":113.08110921430197,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"29","text":"Trump called potential loss being 'screwed'","x":-33.60203879586298,"y":10.649288944102276,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"30","text":"Treasury Secretary expressed confidence","x":430.89956382052264,"y":12.6212382202477,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"31","text":"Defended tariffs as economic necessity","x":151.89200926636903,"y":-77.63614065401623,"color":"#ff6b6b","parentId":"27","orderedChildren":false}];
+const NODE_H = 36;
+const nodeWidth = t => Math.max(t.length * 8.5, 80) + 36;
+let pan = {x:0,y:0}, zoom = 1;
+let panning = false, panStart = null;
+let ctxNode = null;
+
+const svg = document.getElementById('canvas');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs={}, parent) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = '';
+  // Grid
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', {id:'grid', width:40*zoom, height:40*zoom, patternUnits:'userSpaceOnUse', x:pan.x%(40*zoom), y:pan.y%(40*zoom)}, defs);
+  el('path', {d:`M ${40*zoom} 0 L 0 0 0 ${40*zoom}`, fill:'none', stroke:'rgba(0,229,255,0.035)', 'stroke-width':1}, pat);
+  el('rect', {width:'100%', height:'100%', fill:'url(#grid)'}, svg);
+  const g = el('g', {transform:`translate(${pan.x},${pan.y}) scale(${zoom})`}, svg);
+  // Edges
+  NODES.filter(n=>n.parentId).forEach(n => {
+    const p = NODES.find(p=>p.id===n.parentId);
+    if (!p) return;
+    const mx = (p.x+n.x)/2;
+    el('path', {d:`M${p.x},${p.y} Q${mx},${p.y} ${n.x},${n.y}`, fill:'none', stroke:n.color, 'stroke-width':1.5/zoom, 'stroke-opacity':0.4}, g);
+  });
+  // Nodes
+  NODES.forEach(n => {
+    const w = nodeWidth(n.text);
+    const ng = el('g', {transform:`translate(${n.x-w/2},${n.y-NODE_H/2})`, style:'cursor:default'}, g);
+    ng.dataset.id = n.id;
+    el('rect', {x:0,y:0,width:w,height:NODE_H,rx:8,fill:'#111827',stroke:n.color,'stroke-width':1.5/zoom,'stroke-opacity':0.65}, ng);
+    const t = el('text', {x:w/2,y:NODE_H/2+5,'text-anchor':'middle',fill:n.color,'font-size':13,'font-family':"'JetBrains Mono','Fira Mono',monospace",'pointer-events':'none','user-select':'none'}, ng);
+    t.textContent = n.text;
+    ng.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showCtx(e, n); });
+  });
+  updateMinimap();
+  document.getElementById('zoomlabel').textContent = Math.round(zoom*100)+'%';
+}
+
+function fitAll() {
+  const xs = NODES.map(n=>n.x), ys = NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-100, maxX=Math.max(...xs)+100;
+  const minY=Math.min(...ys)-80,  maxY=Math.max(...ys)+80;
+  const cW=maxX-minX, cH=maxY-minY;
+  const vW=window.innerWidth, vH=window.innerHeight-44;
+  zoom = Math.min(vW/cW, vH/cH, 1.2);
+  pan = { x:(vW-cW*zoom)/2-minX*zoom, y:44+(vH-cH*zoom)/2-minY*zoom };
+  render();
+}
+
+function zoomAt(mx,my,f) {
+  const nz = Math.max(0.15, Math.min(4, zoom*f));
+  pan = { x: mx-(mx-pan.x)*(nz/zoom), y: my-(my-pan.y)*(nz/zoom) };
+  zoom = nz; render();
+}
+function zoomIn() { zoomAt(window.innerWidth/2, window.innerHeight/2, 1.2); }
+function zoomOut() { zoomAt(window.innerWidth/2, window.innerHeight/2, 0.8); }
+
+svg.addEventListener('wheel', e => { e.preventDefault(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.1:0.9); }, {passive:false});
+svg.addEventListener('mousedown', e => { if (e.button===0) { panning=true; panStart={x:e.clientX-pan.x, y:e.clientY-pan.y}; hideCtx(); } });
+window.addEventListener('mousemove', e => { if (panning&&panStart) { pan={x:e.clientX-panStart.x, y:e.clientY-panStart.y}; render(); } });
+window.addEventListener('mouseup', () => { panning=false; panStart=null; });
+window.addEventListener('keydown', e => {
+  if (e.key==='f'||e.key==='F') fitAll();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+});
+
+// Context menu
+const ctx = document.getElementById('ctx');
+function showCtx(e, node) {
+  ctxNode = node;
+  document.getElementById('ctx-label').textContent = node.text;
+  document.getElementById('ctx-label').style.color = node.color;
+  ctx.style.left = e.clientX+'px';
+  ctx.style.top = e.clientY+'px';
+  ctx.style.display = 'block';
+}
+function hideCtx() { ctx.style.display='none'; ctxNode=null; }
+document.getElementById('ctx-google').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-news').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text)+'&tbm=nws','_blank'); hideCtx(); };
+document.getElementById('ctx-wiki').onclick = () => { window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-yt').onclick = () => { window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('[data-id]')) e.preventDefault(); });
+
+// Minimap
+function updateMinimap() {
+  const mm = document.getElementById('mm-svg');
+  mm.innerHTML = '';
+  const MW=160,MH=100;
+  const xs=NODES.map(n=>n.x),ys=NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-60,maxX=Math.max(...xs)+60;
+  const minY=Math.min(...ys)-60,maxY=Math.max(...ys)+60;
+  const cW=maxX-minX,cH=maxY-minY;
+  const sc=Math.min(MW/cW,MH/cH);
+  const toMM=(x,y)=>({x:(x-minX)*sc+(MW-cW*sc)/2, y:(y-minY)*sc+(MH-cH*sc)/2});
+  NODES.filter(n=>n.parentId).forEach(n=>{
+    const p=NODES.find(p=>p.id===n.parentId); if(!p) return;
+    const a=toMM(p.x,p.y),b=toMM(n.x,n.y);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:n.color,'stroke-opacity':0.3,'stroke-width':1},mm);
+  });
+  NODES.forEach(n=>{ const p=toMM(n.x,n.y); el('circle',{cx:p.x,cy:p.y,r:n.parentId?2.5:4,fill:n.color,'fill-opacity':0.8},mm); });
+  const vpX=-pan.x/zoom, vpY=(-pan.y+44)/zoom;
+  const vpW=window.innerWidth/zoom, vpH=(window.innerHeight-44)/zoom;
+  const tl=toMM(vpX,vpY),br=toMM(vpX+vpW,vpY+vpH);
+  el('rect',{x:Math.max(0,tl.x),y:Math.max(0,tl.y),width:Math.max(4,br.x-tl.x),height:Math.max(4,br.y-tl.y),fill:'rgba(0,229,255,0.08)',stroke:'#00e5ff','stroke-width':1,'stroke-opacity':0.5,rx:2},mm);
+}
+
+fitAll();
+</script>
+</body>
+</html>
