@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mindmap Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080d14; font-family: 'JetBrains Mono', 'Fira Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
+  #canvas { width: 100%; height: 100%; cursor: default; }
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: rgba(8,13,20,0.93); border-bottom: 1px solid rgba(0,229,255,0.15); display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 10; backdrop-filter: blur(12px); }
+  #title { color: #00e5ff; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-right: 8px; }
+  .tbtn { background: transparent; border: 1px solid #444; color: #888; padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+  .tbtn:hover { border-color: #00e5ff; color: #00e5ff; }
+  #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.15); font-size: 10px; letter-spacing: 1.5px; pointer-events: none; white-space: nowrap; }
+  #ctx { position: fixed; z-index: 200; background: #0d1520; border: 1px solid rgba(0,229,255,0.25); border-radius: 8px; overflow: hidden; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+  #ctx-label { padding: 10px 14px; border-bottom: 1px solid rgba(0,229,255,0.1); font-size: 11px; font-weight: 700; letter-spacing: 1px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-item { padding: 10px 14px; color: #e0e0e0; font-size: 11px; cursor: pointer; letter-spacing: 0.5px; }
+  .ctx-item:hover { background: rgba(0,229,255,0.08); }
+  #minimap { position: fixed; bottom: 36px; right: 16px; background: rgba(8,13,20,0.9); border: 1px solid rgba(0,229,255,0.2); border-radius: 8px; padding: 6px; }
+  #minimap-label { color: rgba(0,229,255,0.3); font-size: 9px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="title">◈ MINDMAP</span>
+  <button class="tbtn" onclick="fitAll()">⌂ Fit</button>
+  <button class="tbtn" onclick="zoomIn()">+</button>
+  <span id="zoomlabel" style="color:#555;font-size:10px;min-width:36px;text-align:center;">100%</span>
+  <button class="tbtn" onclick="zoomOut()">−</button>
+</div>
+<svg id="canvas"></svg>
+<div id="hint">DRAG to pan · SCROLL to zoom · RIGHT-CLICK node to search</div>
+<div id="ctx">
+  <div id="ctx-label"></div>
+  <div class="ctx-item" id="ctx-google">🔍 Google Search</div>
+  <div class="ctx-item" id="ctx-news">📰 Google News</div>
+  <div class="ctx-item" id="ctx-wiki">📖 Wikipedia</div>
+  <div class="ctx-item" id="ctx-yt">▶ YouTube</div>
+</div>
+<div id="minimap">
+  <svg id="mm-svg" width="160" height="100"></svg>
+  <div id="minimap-label">MINIMAP</div>
+</div>
+<script>
+const NODES = [{"id":"1","text":"Strange News 2026","x":600,"y":460,"color":"#00e5ff","parentId":null,"orderedChildren":false},{"id":"2","text":"Animal Oddities","x":752.824165596043,"y":249.65558146251365,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"3","text":"Pig breaks into home for snacks","x":766.6479137641268,"y":-10.603300796655478,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"4","text":"Bird seeks medical help at hospital","x":1051.307047028519,"y":56.20501858834534,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"5","text":"Bald eagles fight to death","x":842.2739696925951,"y":117.83324537359617,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"6","text":"Galapagos bird travels 3000 miles","x":1234.8446883738638,"y":253.3379332018409,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"7","text":"Mountain lion roams San Francisco","x":1216.7358561328015,"y":119.52812897039108,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"8","text":"Climate & Weather Extremes","x":971.5161406873506,"y":468.4321062113873,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"9","text":"Family brings calf indoors during freeze","x":972.6559415507804,"y":339.35927924984935,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"10","text":"Estonians drive across frozen sea","x":1338.3871923945737,"y":396.2275895555171,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"11","text":"Punxsutawney Phil predicts 6 more weeks winter","x":1391.765982638405,"y":526.3776518691413,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"12","text":"Century-long drought reshaped Easter Island","x":981.9341403450163,"y":609.4915089328653,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"13","text":"Science & Discovery","x":664.6593706628622,"y":711.8316218934441,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"14","text":"Ice Age mother-daughter DNA reveals growth disorder","x":1182.173931609075,"y":802.9540099710421,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"15","text":"Deep-sea creature named by internet crowd","x":735.4655703893773,"y":905.6657915900473,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"16","text":"Universe may reverse expansion","x":1053.73029196062,"y":994.9196611599095,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"17","text":"Scientists discover sperm molecular switch","x":241.9277394577165,"y":921.3178350784829,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"18","text":"Rogue planet devours 6 billion tons per second","x":497.11207872028064,"y":1000.7753374853144,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"19","text":"Transportation Mishaps","x":202.42989025586496,"y":678.8102247565904,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"20","text":"NASA plane lands without landing gear","x":-218.9108806244385,"y":868.7107515788749,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"21","text":"Dog goes missing in Spanish train crash","x":-279.9644341287497,"y":733.8409671970999,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"22","text":"Dog races alongside Olympic skiers","x":141.8943171754488,"y":800.6147745659016,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"23","text":"Cultural & Social Oddities","x":340.5130506086494,"y":443.67446492237866,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"24","text":"Seattle area loses only theme park","x":-50.19661003223802,"y":587.9257864590663,"color":"#ff6b6b","parentId":"23","orderedChildren":false},{"id":"25","text":"Men dress as Stephen Hawking for carnival","x":-108.30987948622871,"y":473.09691664540685,"color":"#ff6b6b","parentId":"23","orderedChildren":false},{"id":"26","text":"Dogs dressed for Rio carnival protest","x":-80.80237043262858,"y":359.3527914019962,"color":"#ff6b6b","parentId":"23","orderedChildren":false},{"id":"27","text":"Prison singing contest in Rio","x":39.623388971157325,"y":249.8372540098531,"color":"#ff6b6b","parentId":"23","orderedChildren":false},{"id":"28","text":"Technology Advances","x":474.744044733554,"y":232.16026318859548,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"29","text":"AI beats humans at creativity tests","x":587.0746689843096,"y":72.46924544913173,"color":"#ff6b6b","parentId":"28","orderedChildren":false},{"id":"30","text":"Brain chip streams thoughts in real-time","x":-79.06089196759025,"y":23.511453710368485,"color":"#ff6b6b","parentId":"28","orderedChildren":false},{"id":"31","text":"MIT tool may explain consciousness","x":199.09830097015652,"y":-26.990988056613478,"color":"#ff6b6b","parentId":"28","orderedChildren":false},{"id":"32","text":"Dangerous amoebas spread globally","x":405.75982558015806,"y":-133.14945234833385,"color":"#ff6b6b","parentId":"28","orderedChildren":false}];
+const NODE_H = 36;
+const nodeWidth = t => Math.max(t.length * 8.5, 80) + 36;
+let pan = {x:0,y:0}, zoom = 1;
+let panning = false, panStart = null;
+let ctxNode = null;
+
+const svg = document.getElementById('canvas');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs={}, parent) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = '';
+  // Grid
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', {id:'grid', width:40*zoom, height:40*zoom, patternUnits:'userSpaceOnUse', x:pan.x%(40*zoom), y:pan.y%(40*zoom)}, defs);
+  el('path', {d:`M ${40*zoom} 0 L 0 0 0 ${40*zoom}`, fill:'none', stroke:'rgba(0,229,255,0.035)', 'stroke-width':1}, pat);
+  el('rect', {width:'100%', height:'100%', fill:'url(#grid)'}, svg);
+  const g = el('g', {transform:`translate(${pan.x},${pan.y}) scale(${zoom})`}, svg);
+  // Edges
+  NODES.filter(n=>n.parentId).forEach(n => {
+    const p = NODES.find(p=>p.id===n.parentId);
+    if (!p) return;
+    const mx = (p.x+n.x)/2;
+    el('path', {d:`M${p.x},${p.y} Q${mx},${p.y} ${n.x},${n.y}`, fill:'none', stroke:n.color, 'stroke-width':1.5/zoom, 'stroke-opacity':0.4}, g);
+  });
+  // Nodes
+  NODES.forEach(n => {
+    const w = nodeWidth(n.text);
+    const ng = el('g', {transform:`translate(${n.x-w/2},${n.y-NODE_H/2})`, style:'cursor:default'}, g);
+    ng.dataset.id = n.id;
+    el('rect', {x:0,y:0,width:w,height:NODE_H,rx:8,fill:'#111827',stroke:n.color,'stroke-width':1.5/zoom,'stroke-opacity':0.65}, ng);
+    const t = el('text', {x:w/2,y:NODE_H/2+5,'text-anchor':'middle',fill:n.color,'font-size':13,'font-family':"'JetBrains Mono','Fira Mono',monospace",'pointer-events':'none','user-select':'none'}, ng);
+    t.textContent = n.text;
+    ng.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showCtx(e, n); });
+  });
+  updateMinimap();
+  document.getElementById('zoomlabel').textContent = Math.round(zoom*100)+'%';
+}
+
+function fitAll() {
+  const xs = NODES.map(n=>n.x), ys = NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-100, maxX=Math.max(...xs)+100;
+  const minY=Math.min(...ys)-80,  maxY=Math.max(...ys)+80;
+  const cW=maxX-minX, cH=maxY-minY;
+  const vW=window.innerWidth, vH=window.innerHeight-44;
+  zoom = Math.min(vW/cW, vH/cH, 1.2);
+  pan = { x:(vW-cW*zoom)/2-minX*zoom, y:44+(vH-cH*zoom)/2-minY*zoom };
+  render();
+}
+
+function zoomAt(mx,my,f) {
+  const nz = Math.max(0.15, Math.min(4, zoom*f));
+  pan = { x: mx-(mx-pan.x)*(nz/zoom), y: my-(my-pan.y)*(nz/zoom) };
+  zoom = nz; render();
+}
+function zoomIn() { zoomAt(window.innerWidth/2, window.innerHeight/2, 1.2); }
+function zoomOut() { zoomAt(window.innerWidth/2, window.innerHeight/2, 0.8); }
+
+svg.addEventListener('wheel', e => { e.preventDefault(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.1:0.9); }, {passive:false});
+svg.addEventListener('mousedown', e => { if (e.button===0) { panning=true; panStart={x:e.clientX-pan.x, y:e.clientY-pan.y}; hideCtx(); } });
+window.addEventListener('mousemove', e => { if (panning&&panStart) { pan={x:e.clientX-panStart.x, y:e.clientY-panStart.y}; render(); } });
+window.addEventListener('mouseup', () => { panning=false; panStart=null; });
+window.addEventListener('keydown', e => {
+  if (e.key==='f'||e.key==='F') fitAll();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+});
+
+// Context menu
+const ctx = document.getElementById('ctx');
+function showCtx(e, node) {
+  ctxNode = node;
+  document.getElementById('ctx-label').textContent = node.text;
+  document.getElementById('ctx-label').style.color = node.color;
+  ctx.style.left = e.clientX+'px';
+  ctx.style.top = e.clientY+'px';
+  ctx.style.display = 'block';
+}
+function hideCtx() { ctx.style.display='none'; ctxNode=null; }
+document.getElementById('ctx-google').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-news').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text)+'&tbm=nws','_blank'); hideCtx(); };
+document.getElementById('ctx-wiki').onclick = () => { window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-yt').onclick = () => { window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('[data-id]')) e.preventDefault(); });
+
+// Minimap
+function updateMinimap() {
+  const mm = document.getElementById('mm-svg');
+  mm.innerHTML = '';
+  const MW=160,MH=100;
+  const xs=NODES.map(n=>n.x),ys=NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-60,maxX=Math.max(...xs)+60;
+  const minY=Math.min(...ys)-60,maxY=Math.max(...ys)+60;
+  const cW=maxX-minX,cH=maxY-minY;
+  const sc=Math.min(MW/cW,MH/cH);
+  const toMM=(x,y)=>({x:(x-minX)*sc+(MW-cW*sc)/2, y:(y-minY)*sc+(MH-cH*sc)/2});
+  NODES.filter(n=>n.parentId).forEach(n=>{
+    const p=NODES.find(p=>p.id===n.parentId); if(!p) return;
+    const a=toMM(p.x,p.y),b=toMM(n.x,n.y);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:n.color,'stroke-opacity':0.3,'stroke-width':1},mm);
+  });
+  NODES.forEach(n=>{ const p=toMM(n.x,n.y); el('circle',{cx:p.x,cy:p.y,r:n.parentId?2.5:4,fill:n.color,'fill-opacity':0.8},mm); });
+  const vpX=-pan.x/zoom, vpY=(-pan.y+44)/zoom;
+  const vpW=window.innerWidth/zoom, vpH=(window.innerHeight-44)/zoom;
+  const tl=toMM(vpX,vpY),br=toMM(vpX+vpW,vpY+vpH);
+  el('rect',{x:Math.max(0,tl.x),y:Math.max(0,tl.y),width:Math.max(4,br.x-tl.x),height:Math.max(4,br.y-tl.y),fill:'rgba(0,229,255,0.08)',stroke:'#00e5ff','stroke-width':1,'stroke-opacity':0.5,rx:2},mm);
+}
+
+fitAll();
+</script>
+</body>
+</html>
