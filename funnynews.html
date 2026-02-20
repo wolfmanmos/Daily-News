@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mindmap Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080d14; font-family: 'JetBrains Mono', 'Fira Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
+  #canvas { width: 100%; height: 100%; cursor: default; }
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: rgba(8,13,20,0.93); border-bottom: 1px solid rgba(0,229,255,0.15); display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 10; backdrop-filter: blur(12px); }
+  #title { color: #00e5ff; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-right: 8px; }
+  .tbtn { background: transparent; border: 1px solid #444; color: #888; padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+  .tbtn:hover { border-color: #00e5ff; color: #00e5ff; }
+  #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.15); font-size: 10px; letter-spacing: 1.5px; pointer-events: none; white-space: nowrap; }
+  #ctx { position: fixed; z-index: 200; background: #0d1520; border: 1px solid rgba(0,229,255,0.25); border-radius: 8px; overflow: hidden; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+  #ctx-label { padding: 10px 14px; border-bottom: 1px solid rgba(0,229,255,0.1); font-size: 11px; font-weight: 700; letter-spacing: 1px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-item { padding: 10px 14px; color: #e0e0e0; font-size: 11px; cursor: pointer; letter-spacing: 0.5px; }
+  .ctx-item:hover { background: rgba(0,229,255,0.08); }
+  #minimap { position: fixed; bottom: 36px; right: 16px; background: rgba(8,13,20,0.9); border: 1px solid rgba(0,229,255,0.2); border-radius: 8px; padding: 6px; }
+  #minimap-label { color: rgba(0,229,255,0.3); font-size: 9px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="title">◈ MINDMAP</span>
+  <button class="tbtn" onclick="fitAll()">⌂ Fit</button>
+  <button class="tbtn" onclick="zoomIn()">+</button>
+  <span id="zoomlabel" style="color:#555;font-size:10px;min-width:36px;text-align:center;">100%</span>
+  <button class="tbtn" onclick="zoomOut()">−</button>
+</div>
+<svg id="canvas"></svg>
+<div id="hint">DRAG to pan · SCROLL to zoom · RIGHT-CLICK node to search</div>
+<div id="ctx">
+  <div id="ctx-label"></div>
+  <div class="ctx-item" id="ctx-google">🔍 Google Search</div>
+  <div class="ctx-item" id="ctx-news">📰 Google News</div>
+  <div class="ctx-item" id="ctx-wiki">📖 Wikipedia</div>
+  <div class="ctx-item" id="ctx-yt">▶ YouTube</div>
+</div>
+<div id="minimap">
+  <svg id="mm-svg" width="160" height="100"></svg>
+  <div id="minimap-label">MINIMAP</div>
+</div>
+<script>
+const NODES = [{"id":"1","text":"Funny News Stories","x":600,"y":460,"color":"#00e5ff","parentId":null,"orderedChildren":false},{"id":"2","text":"Animal Antics","x":747.6968341501006,"y":246.02419486764936,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"3","text":"Bald eagles fight to death in Seattle park","x":1290.750973900189,"y":-85.34324994635443,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"4","text":"Cormorant pecks at German hospital door","x":889.6641001602599,"y":-55.270909246004315,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"5","text":"Mountain lion roams San Francisco neighborhood","x":1043.5589586049175,"y":72.16051448000694,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"6","text":"Newborn calf brought inside during cold","x":1138.3385712160107,"y":159.73419926404605,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"7","text":"Dogs in costumes at Rio Carnival","x":1456.0907192583145,"y":97.47811720542884,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"8","text":"Weird Science","x":852.4448725307735,"y":522.2220727147651,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"9","text":"Deep-sea creature named by internet users","x":1316.300235795298,"y":310.3346822595264,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"10","text":"AI beats humans at creativity tests","x":1416.634325840981,"y":399.898897557138,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"11","text":"People get drunk from gut bacteria","x":1246.7984317284647,"y":533.9442674575233,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"12","text":"12,000-year-old mother-daughter DNA reveals disorder","x":1285.302716627363,"y":623.5069236115388,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"13","text":"Universe might end in big crunch","x":1046.6281767677674,"y":713.2281197790642,"color":"#ff6b6b","parentId":"8","orderedChildren":false},{"id":"14","text":"Wacky Weather & Events","x":662.222072714765,"y":712.4448725307735,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"15","text":"Punxsutawney Phil predicts 6 more weeks winter","x":775.8350220609962,"y":877.0416457095048,"color":"#ff6b6b","parentId":"14","orderedChildren":false},{"id":"16","text":"Estonians drive across frozen sea","x":1225.668243227508,"y":804.7317377785804,"color":"#ff6b6b","parentId":"14","orderedChildren":false},{"id":"17","text":"Olympic skier competes in tank top","x":1100.7135856564128,"y":944.137381501631,"color":"#ff6b6b","parentId":"14","orderedChildren":false},{"id":"18","text":"Lizard rescued from Rhode Island snow","x":732.8311199529765,"y":982.0239348173415,"color":"#ff6b6b","parentId":"14","orderedChildren":false},{"id":"19","text":"Strange Human Behavior","x":318.6642680747256,"y":621.4620603732396,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"20","text":"Lawyer throws feces in parking lot","x":325.8843068798713,"y":768.2108460123802,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"21","text":"Convenience store bathrooms become dance floors","x":323.44679784008963,"y":904.4543126635659,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"22","text":"Woman sues Hershey over candy shapes","x":-86.61239099399855,"y":818.1270168690157,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"23","text":"Three fans attend every Super Bowl since 1967","x":-259.1829927633614,"y":729.0236145154176,"color":"#ff6b6b","parentId":"19","orderedChildren":false},{"id":"24","text":"Unusual Discoveries","x":341.895692734506,"y":428.66046313361596,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"25","text":"Rare Galapagos bird spotted in California","x":-124.73974269269192,"y":554.3656165459811,"color":"#ff6b6b","parentId":"24","orderedChildren":false},{"id":"26","text":"773,000-year-old fossils reveal human ancestor","x":-194.49303894896838,"y":425.8803909709426,"color":"#ff6b6b","parentId":"24","orderedChildren":false},{"id":"27","text":"Woman finds diamond after 3 weeks digging","x":-124.73974269269192,"y":341.8763199986776,"color":"#ff6b6b","parentId":"24","orderedChildren":false},{"id":"28","text":"Aloe vera compounds fight Alzheimer's","x":-10.340058644556535,"y":260.65388033268204,"color":"#ff6b6b","parentId":"24","orderedChildren":false},{"id":"29","text":"Pop Culture Oddities","x":479.17197526862026,"y":229.78143333016538,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"30","text":"Missouri redistricting linked to Air Bud movie","x":388.16023795750397,"y":97.15690168200632,"color":"#ff6b6b","parentId":"29","orderedChildren":false},{"id":"31","text":"\"67\" named 2025 word of year","x":-168.83262312481997,"y":92.98538177816754,"color":"#ff6b6b","parentId":"29","orderedChildren":false},{"id":"32","text":"Gen Z boosts Guinness sales dramatically","x":25.218833225119468,"y":-6.645320321110372,"color":"#ff6b6b","parentId":"29","orderedChildren":false},{"id":"33","text":"Larry the cat celebrates 15 years at Downing Street","x":291.3492785267923,"y":-120.11982590166072,"color":"#ff6b6b","parentId":"29","orderedChildren":false}];
+const NODE_H = 36;
+const nodeWidth = t => Math.max(t.length * 8.5, 80) + 36;
+let pan = {x:0,y:0}, zoom = 1;
+let panning = false, panStart = null;
+let ctxNode = null;
+
+const svg = document.getElementById('canvas');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs={}, parent) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = '';
+  // Grid
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', {id:'grid', width:40*zoom, height:40*zoom, patternUnits:'userSpaceOnUse', x:pan.x%(40*zoom), y:pan.y%(40*zoom)}, defs);
+  el('path', {d:`M ${40*zoom} 0 L 0 0 0 ${40*zoom}`, fill:'none', stroke:'rgba(0,229,255,0.035)', 'stroke-width':1}, pat);
+  el('rect', {width:'100%', height:'100%', fill:'url(#grid)'}, svg);
+  const g = el('g', {transform:`translate(${pan.x},${pan.y}) scale(${zoom})`}, svg);
+  // Edges
+  NODES.filter(n=>n.parentId).forEach(n => {
+    const p = NODES.find(p=>p.id===n.parentId);
+    if (!p) return;
+    const mx = (p.x+n.x)/2;
+    el('path', {d:`M${p.x},${p.y} Q${mx},${p.y} ${n.x},${n.y}`, fill:'none', stroke:n.color, 'stroke-width':1.5/zoom, 'stroke-opacity':0.4}, g);
+  });
+  // Nodes
+  NODES.forEach(n => {
+    const w = nodeWidth(n.text);
+    const ng = el('g', {transform:`translate(${n.x-w/2},${n.y-NODE_H/2})`, style:'cursor:default'}, g);
+    ng.dataset.id = n.id;
+    el('rect', {x:0,y:0,width:w,height:NODE_H,rx:8,fill:'#111827',stroke:n.color,'stroke-width':1.5/zoom,'stroke-opacity':0.65}, ng);
+    const t = el('text', {x:w/2,y:NODE_H/2+5,'text-anchor':'middle',fill:n.color,'font-size':13,'font-family':"'JetBrains Mono','Fira Mono',monospace",'pointer-events':'none','user-select':'none'}, ng);
+    t.textContent = n.text;
+    ng.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showCtx(e, n); });
+  });
+  updateMinimap();
+  document.getElementById('zoomlabel').textContent = Math.round(zoom*100)+'%';
+}
+
+function fitAll() {
+  const xs = NODES.map(n=>n.x), ys = NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-100, maxX=Math.max(...xs)+100;
+  const minY=Math.min(...ys)-80,  maxY=Math.max(...ys)+80;
+  const cW=maxX-minX, cH=maxY-minY;
+  const vW=window.innerWidth, vH=window.innerHeight-44;
+  zoom = Math.min(vW/cW, vH/cH, 1.2);
+  pan = { x:(vW-cW*zoom)/2-minX*zoom, y:44+(vH-cH*zoom)/2-minY*zoom };
+  render();
+}
+
+function zoomAt(mx,my,f) {
+  const nz = Math.max(0.15, Math.min(4, zoom*f));
+  pan = { x: mx-(mx-pan.x)*(nz/zoom), y: my-(my-pan.y)*(nz/zoom) };
+  zoom = nz; render();
+}
+function zoomIn() { zoomAt(window.innerWidth/2, window.innerHeight/2, 1.2); }
+function zoomOut() { zoomAt(window.innerWidth/2, window.innerHeight/2, 0.8); }
+
+svg.addEventListener('wheel', e => { e.preventDefault(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.1:0.9); }, {passive:false});
+svg.addEventListener('mousedown', e => { if (e.button===0) { panning=true; panStart={x:e.clientX-pan.x, y:e.clientY-pan.y}; hideCtx(); } });
+window.addEventListener('mousemove', e => { if (panning&&panStart) { pan={x:e.clientX-panStart.x, y:e.clientY-panStart.y}; render(); } });
+window.addEventListener('mouseup', () => { panning=false; panStart=null; });
+window.addEventListener('keydown', e => {
+  if (e.key==='f'||e.key==='F') fitAll();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+});
+
+// Context menu
+const ctx = document.getElementById('ctx');
+function showCtx(e, node) {
+  ctxNode = node;
+  document.getElementById('ctx-label').textContent = node.text;
+  document.getElementById('ctx-label').style.color = node.color;
+  ctx.style.left = e.clientX+'px';
+  ctx.style.top = e.clientY+'px';
+  ctx.style.display = 'block';
+}
+function hideCtx() { ctx.style.display='none'; ctxNode=null; }
+document.getElementById('ctx-google').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-news').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text)+'&tbm=nws','_blank'); hideCtx(); };
+document.getElementById('ctx-wiki').onclick = () => { window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-yt').onclick = () => { window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('[data-id]')) e.preventDefault(); });
+
+// Minimap
+function updateMinimap() {
+  const mm = document.getElementById('mm-svg');
+  mm.innerHTML = '';
+  const MW=160,MH=100;
+  const xs=NODES.map(n=>n.x),ys=NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-60,maxX=Math.max(...xs)+60;
+  const minY=Math.min(...ys)-60,maxY=Math.max(...ys)+60;
+  const cW=maxX-minX,cH=maxY-minY;
+  const sc=Math.min(MW/cW,MH/cH);
+  const toMM=(x,y)=>({x:(x-minX)*sc+(MW-cW*sc)/2, y:(y-minY)*sc+(MH-cH*sc)/2});
+  NODES.filter(n=>n.parentId).forEach(n=>{
+    const p=NODES.find(p=>p.id===n.parentId); if(!p) return;
+    const a=toMM(p.x,p.y),b=toMM(n.x,n.y);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:n.color,'stroke-opacity':0.3,'stroke-width':1},mm);
+  });
+  NODES.forEach(n=>{ const p=toMM(n.x,n.y); el('circle',{cx:p.x,cy:p.y,r:n.parentId?2.5:4,fill:n.color,'fill-opacity':0.8},mm); });
+  const vpX=-pan.x/zoom, vpY=(-pan.y+44)/zoom;
+  const vpW=window.innerWidth/zoom, vpH=(window.innerHeight-44)/zoom;
+  const tl=toMM(vpX,vpY),br=toMM(vpX+vpW,vpY+vpH);
+  el('rect',{x:Math.max(0,tl.x),y:Math.max(0,tl.y),width:Math.max(4,br.x-tl.x),height:Math.max(4,br.y-tl.y),fill:'rgba(0,229,255,0.08)',stroke:'#00e5ff','stroke-width':1,'stroke-opacity':0.5,rx:2},mm);
+}
+
+fitAll();
+</script>
+</body>
+</html>
