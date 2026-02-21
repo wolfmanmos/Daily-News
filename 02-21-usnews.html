@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mindmap Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080d14; font-family: 'JetBrains Mono', 'Fira Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
+  #canvas { width: 100%; height: 100%; cursor: default; }
+  #toolbar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: rgba(8,13,20,0.93); border-bottom: 1px solid rgba(0,229,255,0.15); display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 10; backdrop-filter: blur(12px); }
+  #title { color: #00e5ff; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-right: 8px; }
+  .tbtn { background: transparent; border: 1px solid #444; color: #888; padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+  .tbtn:hover { border-color: #00e5ff; color: #00e5ff; }
+  #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.15); font-size: 10px; letter-spacing: 1.5px; pointer-events: none; white-space: nowrap; }
+  #ctx { position: fixed; z-index: 200; background: #0d1520; border: 1px solid rgba(0,229,255,0.25); border-radius: 8px; overflow: hidden; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+  #ctx-label { padding: 10px 14px; border-bottom: 1px solid rgba(0,229,255,0.1); font-size: 11px; font-weight: 700; letter-spacing: 1px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-item { padding: 10px 14px; color: #e0e0e0; font-size: 11px; cursor: pointer; letter-spacing: 0.5px; }
+  .ctx-item:hover { background: rgba(0,229,255,0.08); }
+  #minimap { position: fixed; bottom: 36px; right: 16px; background: rgba(8,13,20,0.9); border: 1px solid rgba(0,229,255,0.2); border-radius: 8px; padding: 6px; }
+  #minimap-label { color: rgba(0,229,255,0.3); font-size: 9px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="title">◈ MINDMAP</span>
+  <button class="tbtn" onclick="fitAll()">⌂ Fit</button>
+  <button class="tbtn" onclick="zoomIn()">+</button>
+  <span id="zoomlabel" style="color:#555;font-size:10px;min-width:36px;text-align:center;">100%</span>
+  <button class="tbtn" onclick="zoomOut()">−</button>
+</div>
+<svg id="canvas"></svg>
+<div id="hint">DRAG to pan · SCROLL to zoom · RIGHT-CLICK node to search</div>
+<div id="tip" style="position:fixed;display:none;z-index:250;background:#0d1520;border-radius:8px;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e0e0e0;max-width:280px;line-height:1.6;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;letter-spacing:0.3px;">
+  <div id="tip-label" style="font-size:9px;letter-spacing:2px;margin-bottom:4px;opacity:0.7;"></div>
+  <div id="tip-text"></div>
+</div>
+<div id="ctx">
+  <div id="ctx-label"></div>
+  <div class="ctx-item" id="ctx-google">🔍 Google Search</div>
+  <div class="ctx-item" id="ctx-news">📰 Google News</div>
+  <div class="ctx-item" id="ctx-wiki">📖 Wikipedia</div>
+  <div class="ctx-item" id="ctx-yt">▶ YouTube</div>
+</div>
+<div id="minimap">
+  <svg id="mm-svg" width="160" height="100"></svg>
+  <div id="minimap-label">MINIMAP</div>
+</div>
+<script>
+const NODES = [{"id":"1","text":"US News Feb 21 2026","desc":"Major US news stories and developments from February 21st, 2026.","aiPrompt":"Show US news for 02/21/2026","x":600,"y":460,"color":"#00e5ff","parentId":null,"orderedChildren":false},{"id":"2","text":"Supreme Court Ruling","desc":"Supreme Court ruled that Trump's sweeping emergency tariffs are illegal in a major 6-3 decision.","aiPrompt":"Supreme Court Ruling","x":488.19765143514405,"y":115.90775240441343,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"3","text":"Tariff Refunds","desc":"Trump administration promised to refund duties collected but no clear process specified for returning billions.","aiPrompt":"Tariff Refunds","x":302.02133524264775,"y":-85.3512136253108,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"4","text":"Economic Impact","desc":"Tens of billions of dollars that US companies forked over after Trump jacked up tariffs on global partners.","aiPrompt":"Economic Impact","x":400.65295556229853,"y":-153.70124816156394,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"5","text":"Legal Victory","desc":"Companies like Learning Resources felt vindicated by the Supreme Court decision and expect refunds.","aiPrompt":"Legal Victory","x":520.634019034616,"y":-155.8220590456758,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"6","text":"Winter Olympics","desc":"US athletes compete in Milan Winter Olympics 2026 with several medal achievements and upcoming finals.","aiPrompt":"Winter Olympics","x":839.6156433787343,"y":183.81565935946946,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"7","text":"Hockey Gold Final","desc":"Team USA will play Team Canada for gold medal on Sunday after defeating Slovakia 6-2 in semifinals.","aiPrompt":"Hockey Gold Final","x":899.3677938491157,"y":-134.6354517376328,"color":"#ff6b6b","parentId":"6","orderedChildren":false},{"id":"8","text":"Freestyle Skiing","desc":"USA's Alex Ferreira won gold medal in men's freeski halfpipe final with best jump performance.","aiPrompt":"Freestyle Skiing","x":1022.639101282865,"y":-80.90496790889189,"color":"#ff6b6b","parentId":"6","orderedChildren":false},{"id":"9","text":"Curling Bronze","desc":"US will play Canada for bronze medal in women's curling after semifinal results were determined.","aiPrompt":"Curling Bronze","x":1052.7060308054056,"y":35.267230726939175,"color":"#ff6b6b","parentId":"6","orderedChildren":false},{"id":"10","text":"Economy & GDP","desc":"Real GDP increased 1.4 percent in Q4 2025, down from 4.4 percent in Q3 according to Bureau of Economic Analysis.","aiPrompt":"Economy & GDP","x":957.3456416273209,"y":403.4020105484445,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"11","text":"Growth Factors","desc":"GDP increase driven by consumer spending and investment, offset by decreased government spending and exports.","aiPrompt":"Growth Factors","x":1207.9378545239038,"y":302.9641956291173,"color":"#ff6b6b","parentId":"10","orderedChildren":false},{"id":"12","text":"Data Release","desc":"Fourth quarter report was delayed due to October-November 2025 government shutdown and released February 20.","aiPrompt":"Data Release","x":1226.7099903233964,"y":421.4867964668482,"color":"#ff6b6b","parentId":"10","orderedChildren":false},{"id":"13","text":"Immigration Policy","desc":"Department of Homeland Security issued memo advising indefinite detention of refugees without green cards for rescreening.","aiPrompt":"Immigration Policy","x":922.3661604513516,"y":624.253762805768,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"14","text":"City Resistance","desc":"Mayors of major cities like Chicago and Los Angeles taking steps to limit ICE operations within their jurisdictions.","aiPrompt":"City Resistance","x":1193.1117606298656,"y":694.8659621947735,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"15","text":"Biden Admin Impact","desc":"Policy puts many people admitted to US during Biden administration at risk of detention.","aiPrompt":"Biden Admin Impact","x":1138.6329006752546,"y":801.7867450696378,"color":"#ff6b6b","parentId":"13","orderedChildren":false},{"id":"16","text":"Foreign Relations","desc":"Trump administration faces diplomatic challenges with Iran negotiations and international trade agreements.","aiPrompt":"Foreign Relations","x":255.90775240441343,"y":571.8023485648561,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"17","text":"Iran Ultimatum","desc":"Trump says world will find out in next 10 days whether US reaches deal with Iran or takes military action.","aiPrompt":"Iran Ultimatum","x":25.863770053897127,"y":738.9390850542209,"color":"#ff6b6b","parentId":"16","orderedChildren":false},{"id":"18","text":"India Trade Deal","desc":"Trump confirmed no change in trade deal with India, emphasizing that India deal is on after court ruling.","aiPrompt":"India Trade Deal","x":-10.047622842479502,"y":305.1880638133115,"color":"#ff6b6b","parentId":"16","orderedChildren":false},{"id":"19","text":"Congressional Warning","desc":"Top Democrats urged Trump not to conduct military action in Iran without congressional approval.","aiPrompt":"Congressional Warning","x":271.2345616505893,"y":285.0248204604395,"color":"#ff6b6b","parentId":"16","orderedChildren":false},{"id":"20","text":"Social Media Trial","desc":"Mark Zuckerberg testified in landmark social media addiction trial in Los Angeles that could affect 1,600 pending cases.","aiPrompt":"Social Media Trial","x":737.2988237064505,"y":121.11583162432294,"color":"#69ff47","parentId":"1","orderedChildren":false},{"id":"21","text":"Family Lawsuits","desc":"Jury's verdict could shape how pending cases from families and school districts are resolved nationwide.","aiPrompt":"Family Lawsuits","x":779.6717298426759,"y":-143.1707434296688,"color":"#ff6b6b","parentId":"20","orderedChildren":false},{"id":"22","text":"Platform Design","desc":"Trial examines whether social media giants deliberately designed platforms to be addictive to children.","aiPrompt":"Platform Design","x":921.0399720673587,"y":-16.60869215999717,"color":"#ff6b6b","parentId":"20","orderedChildren":false},{"id":"25","text":"US Ultimatum Deadline","desc":"<cite index='1-1,4-6'>Trump has given Iran 10-15 days maximum to reach a nuclear agreement or face military consequences</cite>.","aiPrompt":"US Ultimatum Deadline","x":480.9851462817894,"y":750.6260006855057,"color":"#ffd93d","parentId":"17","orderedChildren":false},{"id":"26","text":"Nuclear Demands","desc":"<cite index='3-1,8-1'>US demands Iran dismantle uranium enrichment capabilities and accept permanent nuclear freeze</cite>.","aiPrompt":"Nuclear Demands","x":713.1639255973545,"y":885.8750565563469,"color":"#c77dff","parentId":"25","orderedChildren":false},{"id":"27","text":"Regional Proxy Issues","desc":"<cite index='1-8,8-8'>US requires Iran to end support for regional proxy groups and reduce ballistic missile capabilities</cite>.","aiPrompt":"Regional Proxy Issues","x":426.44460138413484,"y":898.8736955632121,"color":"#c77dff","parentId":"25","orderedChildren":false},{"id":"28","text":"Military Buildup","desc":"<cite index='1-9,6-18'>Two US carrier strike groups with advanced aircraft positioned near Iran</cite>.","aiPrompt":"Military Buildup","x":160.4958706699361,"y":915.3081249750729,"color":"#c77dff","parentId":"25","orderedChildren":false},{"id":"29","text":"Iranian Response","desc":"<cite index='6-3,6-11'>Iran says it's prepared for peace and diplomacy, claiming a deal is achievable</cite>.","aiPrompt":"Iranian Response","x":-141.2729664354676,"y":968.9830674047372,"color":"#ffd93d","parentId":"17","orderedChildren":false},{"id":"30","text":"Diplomatic Stance","desc":"<cite index='6-14'>Iranian officials say they only respond to the language of respect, not threats</cite>.","aiPrompt":"Diplomatic Stance","x":15.195974653184,"y":1111.9938361127463,"color":"#c77dff","parentId":"29","orderedChildren":false},{"id":"31","text":"Military Preparations","desc":"<cite index='2-6,8-13'>Iran conducting joint naval exercises with Russia and China in response</cite>.","aiPrompt":"Military Preparations","x":-216.68299628405947,"y":1189.1878164177508,"color":"#c77dff","parentId":"29","orderedChildren":false},{"id":"32","text":"Red Lines","desc":"<cite index='9-15,9-16'>Iran cannot accept missile limitations as set by Supreme Leader Khamenei</cite>.","aiPrompt":"Red Lines","x":-348.47583030394367,"y":1088.3638844408688,"color":"#c77dff","parentId":"29","orderedChildren":false},{"id":"33","text":"Market Impact","desc":"<cite index='2-9,3-9'>Oil prices surge to six-month highs while gold reaches historic $5,000 milestone</cite>.","aiPrompt":"Market Impact","x":-254.98540959433026,"y":783.4212251884105,"color":"#ffd93d","parentId":"17","orderedChildren":false},{"id":"34","text":"Energy Markets","desc":"<cite index='2-2'>Investors fear potential Strait of Hormuz closure affecting 20% of world oil flows</cite>.","aiPrompt":"Energy Markets","x":-581.2046837412931,"y":918.4276113739024,"color":"#c77dff","parentId":"33","orderedChildren":false},{"id":"35","text":"Global Volatility","desc":"<cite index='2-17'>Markets now operating in headline-driven environment with billions at stake</cite>.","aiPrompt":"Global Volatility","x":-573.5457760423835,"y":696.9630516440992,"color":"#c77dff","parentId":"33","orderedChildren":false},{"id":"36","text":"Timeline and Stakes","desc":"<cite index='1-12,5-8'>Deadline approaches between February 28-March 3, coinciding with IAEA board meeting</cite>.","aiPrompt":"Timeline and Stakes","x":-204.1802122966192,"y":571.8023485648562,"color":"#ffd93d","parentId":"17","orderedChildren":false},{"id":"37","text":"February 23","desc":"<cite index='1-24'>Possible Iranian formal counter-proposal submission regarding guiding principles</cite>.","aiPrompt":"February 23","x":-656.3911458465394,"y":519.7156006581209,"color":"#c77dff","parentId":"36","orderedChildren":false},{"id":"38","text":"March 2-6","desc":"<cite index='5-8,5-9'>IAEA board meeting in Vienna to decide on further censure resolutions</cite>.","aiPrompt":"March 2-6","x":-544.3718336188192,"y":324.888575182285,"color":"#c77dff","parentId":"36","orderedChildren":false},{"id":"39","text":"Potential Outcomes","desc":"<cite index='1-28'>Diplomatic breakthrough has 40-50% chance if US shifts from zero enrichment demands</cite>.","aiPrompt":"Potential Outcomes","x":-338.26058009684107,"y":153.96775660615532,"color":"#c77dff","parentId":"36","orderedChildren":false}];
+const NODE_H = 36;
+const nodeWidth = t => Math.max(t.length * 8.5, 80) + 36;
+let pan = {x:0,y:0}, zoom = 1;
+let panning = false, panStart = null;
+let ctxNode = null;
+
+const svg = document.getElementById('canvas');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs={}, parent) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = '';
+  // Grid
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', {id:'grid', width:40*zoom, height:40*zoom, patternUnits:'userSpaceOnUse', x:pan.x%(40*zoom), y:pan.y%(40*zoom)}, defs);
+  el('path', {d:`M ${40*zoom} 0 L 0 0 0 ${40*zoom}`, fill:'none', stroke:'rgba(0,229,255,0.035)', 'stroke-width':1}, pat);
+  el('rect', {width:'100%', height:'100%', fill:'url(#grid)'}, svg);
+  const g = el('g', {transform:`translate(${pan.x},${pan.y}) scale(${zoom})`}, svg);
+  // Edges
+  NODES.filter(n=>n.parentId).forEach(n => {
+    const p = NODES.find(p=>p.id===n.parentId);
+    if (!p) return;
+    const mx = (p.x+n.x)/2;
+    el('path', {d:`M${p.x},${p.y} Q${mx},${p.y} ${n.x},${n.y}`, fill:'none', stroke:n.color, 'stroke-width':1.5/zoom, 'stroke-opacity':0.4}, g);
+  });
+  // Nodes
+  NODES.forEach(n => {
+    const w = nodeWidth(n.text);
+    const ng = el('g', {transform:`translate(${n.x-w/2},${n.y-NODE_H/2})`, style:'cursor:default'}, g);
+    ng.dataset.id = n.id;
+    el('rect', {x:0,y:0,width:w,height:NODE_H,rx:8,fill:'#ffffff',stroke:n.color,'stroke-width':1.5/zoom,'stroke-opacity':0.85}, ng);
+    const t = el('text', {x:w/2,y:NODE_H/2+5,'text-anchor':'middle',fill:'#111111','font-size':13,'font-weight':'500','font-family':"'JetBrains Mono','Fira Mono',monospace",'pointer-events':'none','user-select':'none'}, ng);
+    t.textContent = n.text;
+    ng.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showCtx(e, n); });
+    if (n.desc) {
+      let tipTimer;
+      ng.addEventListener('mouseenter', e => {
+        tipTimer = setTimeout(() => showTip(e, n), 500);
+      });
+      ng.addEventListener('mouseleave', () => { clearTimeout(tipTimer); hideTip(); });
+      ng.addEventListener('mousemove', e => {
+        const tip = document.getElementById('tip');
+        if (tip.style.display === 'block') {
+          tip.style.left = (e.clientX + 12) + 'px';
+          tip.style.top = (e.clientY - 10) + 'px';
+        }
+      });
+    }
+  });
+  updateMinimap();
+  document.getElementById('zoomlabel').textContent = Math.round(zoom*100)+'%';
+}
+
+function fitAll() {
+  const xs = NODES.map(n=>n.x), ys = NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-100, maxX=Math.max(...xs)+100;
+  const minY=Math.min(...ys)-80,  maxY=Math.max(...ys)+80;
+  const cW=maxX-minX, cH=maxY-minY;
+  const vW=window.innerWidth, vH=window.innerHeight-44;
+  zoom = Math.min(vW/cW, vH/cH, 1.2);
+  pan = { x:(vW-cW*zoom)/2-minX*zoom, y:44+(vH-cH*zoom)/2-minY*zoom };
+  render();
+}
+
+function zoomAt(mx,my,f) {
+  const nz = Math.max(0.15, Math.min(4, zoom*f));
+  pan = { x: mx-(mx-pan.x)*(nz/zoom), y: my-(my-pan.y)*(nz/zoom) };
+  zoom = nz; render();
+}
+function zoomIn() { zoomAt(window.innerWidth/2, window.innerHeight/2, 1.2); }
+function zoomOut() { zoomAt(window.innerWidth/2, window.innerHeight/2, 0.8); }
+
+svg.addEventListener('wheel', e => { e.preventDefault(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.1:0.9); }, {passive:false});
+svg.addEventListener('mousedown', e => { if (e.button===0) { panning=true; panStart={x:e.clientX-pan.x, y:e.clientY-pan.y}; hideCtx(); } });
+window.addEventListener('mousemove', e => { if (panning&&panStart) { pan={x:e.clientX-panStart.x, y:e.clientY-panStart.y}; render(); } });
+window.addEventListener('mouseup', () => { panning=false; panStart=null; });
+window.addEventListener('keydown', e => {
+  if (e.key==='f'||e.key==='F') fitAll();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+});
+
+// Tooltip
+function showTip(e, node) {
+  const tip = document.getElementById('tip');
+  document.getElementById('tip-label').textContent = 'INFO';
+  document.getElementById('tip-label').style.color = node.color;
+  document.getElementById('tip-text').textContent = node.desc;
+  tip.style.borderColor = node.color;
+  tip.style.left = (e.clientX + 12) + 'px';
+  tip.style.top = (e.clientY - 10) + 'px';
+  tip.style.display = 'block';
+}
+function hideTip() { document.getElementById('tip').style.display = 'none'; }
+
+// Context menu
+const ctx = document.getElementById('ctx');
+function showCtx(e, node) {
+  ctxNode = node;
+  document.getElementById('ctx-label').textContent = node.text;
+  document.getElementById('ctx-label').style.color = node.color;
+  ctx.style.left = e.clientX+'px';
+  ctx.style.top = e.clientY+'px';
+  ctx.style.display = 'block';
+}
+function hideCtx() { ctx.style.display='none'; ctxNode=null; }
+document.getElementById('ctx-google').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-news').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text)+'&tbm=nws','_blank'); hideCtx(); };
+document.getElementById('ctx-wiki').onclick = () => { window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-yt').onclick = () => { window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('[data-id]')) e.preventDefault(); });
+
+// Minimap
+function updateMinimap() {
+  const mm = document.getElementById('mm-svg');
+  mm.innerHTML = '';
+  const MW=160,MH=100;
+  const xs=NODES.map(n=>n.x),ys=NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-60,maxX=Math.max(...xs)+60;
+  const minY=Math.min(...ys)-60,maxY=Math.max(...ys)+60;
+  const cW=maxX-minX,cH=maxY-minY;
+  const sc=Math.min(MW/cW,MH/cH);
+  const toMM=(x,y)=>({x:(x-minX)*sc+(MW-cW*sc)/2, y:(y-minY)*sc+(MH-cH*sc)/2});
+  NODES.filter(n=>n.parentId).forEach(n=>{
+    const p=NODES.find(p=>p.id===n.parentId); if(!p) return;
+    const a=toMM(p.x,p.y),b=toMM(n.x,n.y);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:n.color,'stroke-opacity':0.3,'stroke-width':1},mm);
+  });
+  NODES.forEach(n=>{ const p=toMM(n.x,n.y); el('circle',{cx:p.x,cy:p.y,r:n.parentId?2.5:4,fill:n.color,'fill-opacity':0.8},mm); });
+  const vpX=-pan.x/zoom, vpY=(-pan.y+44)/zoom;
+  const vpW=window.innerWidth/zoom, vpH=(window.innerHeight-44)/zoom;
+  const tl=toMM(vpX,vpY),br=toMM(vpX+vpW,vpY+vpH);
+  el('rect',{x:Math.max(0,tl.x),y:Math.max(0,tl.y),width:Math.max(4,br.x-tl.x),height:Math.max(4,br.y-tl.y),fill:'rgba(0,229,255,0.08)',stroke:'#00e5ff','stroke-width':1,'stroke-opacity':0.5,rx:2},mm);
+}
+
+fitAll();
+</script>
+</body>
+</html>
