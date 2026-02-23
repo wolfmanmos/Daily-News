@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mindmap Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #080d14; font-family: 'JetBrains Mono', 'Fira Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
+  #canvas { width: 100%; height: 100%; cursor: default; }
+  #tabsbar { position: fixed; top: 0; left: 0; right: 0; height: 32px; background: rgba(5,10,18,0.98); border-bottom: 1px solid rgba(0,229,255,0.1); display: flex; align-items: stretch; overflow-x: auto; z-index: 11; font-family: inherit; }
+  .vtab { display: flex; align-items: center; padding: 0 14px; min-width: 80px; max-width: 160px; font-size: 10px; letter-spacing: 0.5px; color: #555; cursor: pointer; border-right: 1px solid rgba(0,229,255,0.08); border-bottom: 2px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .vtab:hover { color: #888; background: rgba(255,255,255,0.03); }
+  .vtab-active { color: #00e5ff !important; border-bottom: 2px solid #00e5ff !important; background: rgba(0,229,255,0.06) !important; }
+  #toolbar { position: fixed; top: 32px; left: 0; right: 0; height: 44px; background: rgba(8,13,20,0.93); border-bottom: 1px solid rgba(0,229,255,0.15); display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 10; backdrop-filter: blur(12px); }
+  #title { color: #00e5ff; font-size: 12px; letter-spacing: 3px; font-weight: 700; margin-right: 8px; }
+  .tbtn { background: transparent; border: 1px solid #444; color: #888; padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; }
+  .tbtn:hover { border-color: #00e5ff; color: #00e5ff; }
+  #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.15); font-size: 10px; letter-spacing: 1.5px; pointer-events: none; white-space: nowrap; }
+  #ctx { position: fixed; z-index: 200; background: #0d1520; border: 1px solid rgba(0,229,255,0.25); border-radius: 8px; overflow: hidden; min-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; }
+  #ctx-label { padding: 10px 14px; border-bottom: 1px solid rgba(0,229,255,0.1); font-size: 11px; font-weight: 700; letter-spacing: 1px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx-item { padding: 10px 14px; color: #e0e0e0; font-size: 11px; cursor: pointer; letter-spacing: 0.5px; }
+  .ctx-item:hover { background: rgba(0,229,255,0.08); }
+  #minimap { position: fixed; bottom: 36px; right: 16px; background: rgba(8,13,20,0.9); border: 1px solid rgba(0,229,255,0.2); border-radius: 8px; padding: 6px; }
+  #minimap-label { color: rgba(0,229,255,0.3); font-size: 9px; letter-spacing: 1.5px; text-align: center; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div id="tabsbar"></div>
+<div id="toolbar">
+  <span id="title">◈ MINDMAP</span>
+  <button class="tbtn" onclick="fitAll()">⌂ Fit</button>
+  <button class="tbtn" onclick="zoomIn()">+</button>
+  <span id="zoomlabel" style="color:#555;font-size:10px;min-width:36px;text-align:center;">100%</span>
+  <button class="tbtn" onclick="zoomOut()">−</button>
+</div>
+<svg id="canvas"></svg>
+<div id="hint">DRAG to pan · SCROLL to zoom · RIGHT-CLICK node to search</div>
+<div id="tip" style="position:fixed;display:none;z-index:250;background:#0d1520;border-radius:8px;padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e0e0e0;max-width:280px;line-height:1.6;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:none;letter-spacing:0.3px;">
+  <div id="tip-label" style="font-size:9px;letter-spacing:2px;margin-bottom:4px;opacity:0.7;"></div>
+  <div id="tip-text"></div>
+</div>
+<div id="ctx">
+  <div id="ctx-label"></div>
+  <div class="ctx-item" id="ctx-google">🔍 Google Search</div>
+  <div class="ctx-item" id="ctx-news">📰 Google News</div>
+  <div class="ctx-item" id="ctx-wiki">📖 Wikipedia</div>
+  <div class="ctx-item" id="ctx-yt">▶ YouTube</div>
+</div>
+<div id="minimap">
+  <svg id="mm-svg" width="160" height="100"></svg>
+  <div id="minimap-label">MINIMAP</div>
+</div>
+<script>
+const TABS = [{"id":"1","name":"Show the US news for 02/","nodes":[{"id":"1","text":"US News Feb 23","desc":"A comprehensive overview of major US news stories and developments for February 23, 2026.","aiPrompt":"Show the US news for 02/23/2026.  Include domestic, economic, world and trending stories, technology especially ai related developments.  Feel free to add some odd news events.","x":600,"y":460,"color":"#00e5ff","parentId":null,"orderedChildren":false},{"id":"27","text":"Odd News","desc":"Unusual and entertaining news stories that captured public attention across the United States.","aiPrompt":"Odd News","x":606.4101921868498,"y":303.2839193549792,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853418373"},{"id":"12","text":"AI Technology","desc":"Artificial intelligence continues rapid advancement with new models, applications, and industry developments.","aiPrompt":"AI Technology","x":598.991574549718,"y":629.0224061525988,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853564236"},{"id":"22","text":"Domestic Politics","desc":"Political developments include government operations, policy debates, and security incidents.","aiPrompt":"Domestic Politics","x":349.5781334427842,"y":209.57813344278424,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853649496"},{"id":"2","text":"Weather Crisis","desc":"A massive nor'easter blizzard is hitting the Northeast, causing widespread disruption and dangerous conditions.","aiPrompt":"Weather Crisis","x":760.7807354827605,"y":144.45003945868956,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853697902"},{"id":"7","text":"Economy News","desc":"Economic data shows slowing growth while officials maintain optimistic projections for 2026.","aiPrompt":"Economy News","x":887.7257712752422,"y":466.91372317952437,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853716733"},{"id":"17","text":"World Events","desc":"International developments affecting US interests include conflicts, diplomatic tensions, and global affairs.","aiPrompt":"World Events","x":284.45003945868956,"y":620.7807354827605,"color":"#69ff47","parentId":"1","orderedChildren":false,"isTabLink":true,"targetTabId":"tab-1771853746000"}]},{"id":"tab-1771853418373","name":"Odd News","nodes":[{"id":"27","text":"Odd News","desc":"Unusual and entertaining news stories that captured public attention across the United States.","aiPrompt":"Odd News","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"28","text":"Animal Antics","desc":"A trespassing pig seeking snacks leads to 'bacon and entering' arrest in North Carolina home.","aiPrompt":"Animal Antics","x":846.8156219731644,"y":213.18437802683556,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"29","text":"Olympic Dog","desc":"An escaped dog joins women's cross-country skiing team sprint at Winter Olympics finish line.","aiPrompt":"Olympic Dog","x":846.8156219731644,"y":706.8156219731644,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"30","text":"Record Manatee","desc":"A 71-year-old Florida aquarium manatee is certified as the oldest ever by Guinness World Records.","aiPrompt":"Record Manatee","x":353.1843780268356,"y":706.8156219731644,"color":"#ff6b6b","parentId":"27","orderedChildren":false},{"id":"31","text":"Death Postcards","desc":"A 94-year-old design professor sends postcards announcing his own death with message 'If you're reading this, I'm dead.'","aiPrompt":"Death Postcards","x":353.18437802683553,"y":213.1843780268356,"color":"#ff6b6b","parentId":"27","orderedChildren":false}]},{"id":"tab-1771853564236","name":"AI Technology","nodes":[{"id":"12","text":"AI Technology","desc":"Artificial intelligence continues rapid advancement with new models, applications, and industry developments.","aiPrompt":"AI Technology","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"13","text":"Model Improvements","desc":"Google introduces Gemini 3.1 Pro with more than double the reasoning performance of previous models.","aiPrompt":"Model Improvements","x":854.0281111412672,"y":205.9718888587328,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"14","text":"Enterprise Adoption","desc":"Microsoft Teams adds five new AI-powered features while businesses focus on smaller, domain-specific models.","aiPrompt":"Enterprise Adoption","x":854.0281111412672,"y":714.0281111412672,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"15","text":"Healthcare AI","desc":"Weill Cornell Medicine launches AI to Advance Medicine program for precision medicine and clinical care.","aiPrompt":"Healthcare AI","x":345.9718888587328,"y":714.0281111412672,"color":"#ff6b6b","parentId":"12","orderedChildren":false},{"id":"16","text":"Industry Shift","desc":"AI development moves from hype to pragmatism with focus on practical applications over scaling.","aiPrompt":"Industry Shift","x":345.97188885873277,"y":205.97188885873283,"color":"#ff6b6b","parentId":"12","orderedChildren":false}]},{"id":"tab-1771853649496","name":"Domestic Politics","nodes":[{"id":"22","text":"Domestic Politics","desc":"Political developments include government operations, policy debates, and security incidents.","aiPrompt":"Domestic Politics","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"23","text":"DHS Shutdown","desc":"Partial Department of Homeland Security shutdown continues for nine days over immigration enforcement disputes.","aiPrompt":"DHS Shutdown","x":861.2406003093699,"y":198.75939969063,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"24","text":"Security Incident","desc":"Secret Service shoots and kills armed man who drove through security gate at Trump's Mar-a-Lago resort.","aiPrompt":"Security Incident","x":861.2406003093699,"y":721.2406003093699,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"25","text":"State of Union","desc":"President's State of the Union address approaches amid mounting pressure for DHS funding resolution.","aiPrompt":"State of Union","x":338.75939969063006,"y":721.2406003093699,"color":"#ff6b6b","parentId":"22","orderedChildren":false},{"id":"26","text":"Immigration Enforcement","desc":"Federal judge rules ICE officers violate Constitution when making arrests while masked in West Virginia case.","aiPrompt":"Immigration Enforcement","x":338.75939969062995,"y":198.75939969063006,"color":"#ff6b6b","parentId":"22","orderedChildren":false}]},{"id":"tab-1771853697902","name":"Weather Crisis","nodes":[{"id":"2","text":"Weather Crisis","desc":"A massive nor'easter blizzard is hitting the Northeast, causing widespread disruption and dangerous conditions.","aiPrompt":"Weather Crisis","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"3","text":"Blizzard Warnings","desc":"Blizzard warnings cover 41 million people from Maryland to Maine with up to 2 feet of snow expected.","aiPrompt":"Blizzard Warnings","x":850.4218665572158,"y":209.5781334427842,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"4","text":"Travel Disruption","desc":"States of emergency are in effect with travel bans, hundreds of flight cancellations, and suspended transit services.","aiPrompt":"Travel Disruption","x":850.4218665572158,"y":710.4218665572158,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"5","text":"Power Outages","desc":"Over 100,000 customers are without power, with 57,067 outages reported in New Jersey alone.","aiPrompt":"Power Outages","x":349.57813344278424,"y":710.4218665572158,"color":"#ff6b6b","parentId":"2","orderedChildren":false},{"id":"6","text":"Historic Snowfall","desc":"NYC could see its highest snowfall in over 5 years with snowfall rates up to 4 inches per hour.","aiPrompt":"Historic Snowfall","x":349.5781334427842,"y":209.57813344278424,"color":"#ff6b6b","parentId":"2","orderedChildren":false}]},{"id":"tab-1771853716733","name":"Economy News","nodes":[{"id":"7","text":"Economy News","desc":"Economic data shows slowing growth while officials maintain optimistic projections for 2026.","aiPrompt":"Economy News","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"8","text":"GDP Growth Slows","desc":"Fourth quarter 2025 GDP grew at just 1.4% annual rate, down from 4.4% in the third quarter.","aiPrompt":"GDP Growth Slows","x":850.4218665572158,"y":209.5781334427842,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"9","text":"Treasury Outlook","desc":"Treasury Secretary Bessent believes the US economy can grow at least 3.5% in 2026 despite recent slowdown.","aiPrompt":"Treasury Outlook","x":850.4218665572158,"y":710.4218665572158,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"10","text":"Fed Policy Debate","desc":"Federal Reserve faces dual pressures with inflation concerns versus rising unemployment and slowing job growth.","aiPrompt":"Fed Policy Debate","x":349.57813344278424,"y":710.4218665572158,"color":"#ff6b6b","parentId":"7","orderedChildren":false},{"id":"11","text":"Market Concerns","desc":"Questions persist about AI stock valuations and whether current market levels represent a bubble.","aiPrompt":"Market Concerns","x":349.5781334427842,"y":209.57813344278424,"color":"#ff6b6b","parentId":"7","orderedChildren":false}]},{"id":"tab-1771853746000","name":"World Events","nodes":[{"id":"17","text":"World Events","desc":"International developments affecting US interests include conflicts, diplomatic tensions, and global affairs.","aiPrompt":"World Events","x":600,"y":460,"color":"#69ff47","parentId":null,"orderedChildren":false,"isTabLink":false,"targetTabId":null},{"id":"18","text":"Iran Tensions","desc":"Iran warns that any limited US strike would be considered aggression amid military buildup in Middle East.","aiPrompt":"Iran Tensions","x":848.6187442651901,"y":211.38125573480986,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"19","text":"Ukraine Conflict","desc":"Russia continues attacks on Ukrainian infrastructure while debates over Western support persist.","aiPrompt":"Ukraine Conflict","x":848.6187442651901,"y":708.6187442651901,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"20","text":"Trade Policy","desc":"Supreme Court ruling limits Trump's tariff powers, prompting shift to 15% global tariff under emergency powers.","aiPrompt":"Trade Policy","x":351.3812557348099,"y":708.6187442651901,"color":"#ff6b6b","parentId":"17","orderedChildren":false},{"id":"21","text":"Winter Olympics","desc":"Team USA achieves historic Winter Olympics performance with 12 gold medals, the most ever won.","aiPrompt":"Winter Olympics","x":351.3812557348098,"y":211.38125573480988,"color":"#ff6b6b","parentId":"17","orderedChildren":false}]}];
+let activeTabId = TABS[0].id;
+let NODES = TABS[0].nodes;
+const NODE_H = 36;
+const nodeWidth = t => Math.max(t.length * 8.5, 80) + 36;
+let pan = {x:0,y:0}, zoom = 1;
+let panning = false, panStart = null;
+let ctxNode = null;
+
+const svg = document.getElementById('canvas');
+const NS = 'http://www.w3.org/2000/svg';
+
+function switchTab(tabId) {
+  activeTabId = tabId;
+  NODES = TABS.find(t => t.id === tabId).nodes;
+  pan = {x:0,y:0}; zoom = 1;
+  renderTabsBar();
+  fitAll();
+}
+
+function renderTabsBar() {
+  const bar = document.getElementById('tabsbar');
+  bar.innerHTML = '';
+  TABS.forEach(tab => {
+    const d = document.createElement('div');
+    d.className = 'vtab' + (tab.id === activeTabId ? ' vtab-active' : '');
+    d.textContent = tab.name;
+    d.onclick = () => switchTab(tab.id);
+    bar.appendChild(d);
+  });
+}
+
+function el(tag, attrs={}, parent) {
+  const e = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k,v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function render() {
+  svg.innerHTML = '';
+  // Grid
+  const defs = el('defs', {}, svg);
+  const pat = el('pattern', {id:'grid', width:40*zoom, height:40*zoom, patternUnits:'userSpaceOnUse', x:pan.x%(40*zoom), y:pan.y%(40*zoom)}, defs);
+  el('path', {d:`M ${40*zoom} 0 L 0 0 0 ${40*zoom}`, fill:'none', stroke:'rgba(0,229,255,0.035)', 'stroke-width':1}, pat);
+  el('rect', {width:'100%', height:'100%', fill:'url(#grid)'}, svg);
+  const g = el('g', {transform:`translate(${pan.x},${pan.y}) scale(${zoom})`}, svg);
+  // Edges
+  NODES.filter(n=>n.parentId).forEach(n => {
+    const p = NODES.find(p=>p.id===n.parentId);
+    if (!p) return;
+    const mx = (p.x+n.x)/2;
+    el('path', {d:`M${p.x},${p.y} Q${mx},${p.y} ${n.x},${n.y}`, fill:'none', stroke:n.color, 'stroke-width':1.5/zoom, 'stroke-opacity':0.4}, g);
+  });
+  // Nodes
+  NODES.forEach(n => {
+    const w = nodeWidth(n.text);
+    const ng = el('g', {transform:`translate(${n.x-w/2},${n.y-NODE_H/2})`, style:'cursor:default'}, g);
+    ng.dataset.id = n.id;
+    el('rect', {x:0,y:0,width:w,height:NODE_H,rx:8,fill:'#ffffff',stroke:n.color,'stroke-width':1.5/zoom,'stroke-opacity':0.85}, ng);
+    const t = el('text', {x:w/2,y:NODE_H/2+5,'text-anchor':'middle',fill:'#111111','font-size':13,'font-weight':'500','font-family':"'JetBrains Mono','Fira Mono',monospace",'pointer-events':'none','user-select':'none'}, ng);
+    t.textContent = n.text;
+    ng.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); showCtx(e, n); });
+    if (n.isTabLink && n.targetTabId) {
+      ng.style.cursor = 'pointer';
+      ng.setAttribute('stroke-dasharray', '6,3');
+      let lastClick = 0;
+      ng.addEventListener('click', e => {
+        const now = Date.now();
+        if (now - lastClick < 400) {
+          const target = TABS.find(t => t.id === n.targetTabId);
+          if (target) switchTab(n.targetTabId);
+        }
+        lastClick = now;
+      });
+    }
+    if (n.desc) {
+      let tipTimer;
+      ng.addEventListener('mouseenter', e => {
+        tipTimer = setTimeout(() => showTip(e, n), 500);
+      });
+      ng.addEventListener('mouseleave', () => { clearTimeout(tipTimer); hideTip(); });
+      ng.addEventListener('mousemove', e => {
+        const tip = document.getElementById('tip');
+        if (tip.style.display === 'block') {
+          tip.style.left = (e.clientX + 12) + 'px';
+          tip.style.top = (e.clientY - 10) + 'px';
+        }
+      });
+    }
+  });
+  updateMinimap();
+  document.getElementById('zoomlabel').textContent = Math.round(zoom*100)+'%';
+}
+
+function fitAll() {
+  if (!NODES.length) return;
+  const xs = NODES.map(n=>n.x), ys = NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-100, maxX=Math.max(...xs)+100;
+  const minY=Math.min(...ys)-80,  maxY=Math.max(...ys)+80;
+  const cW=maxX-minX, cH=maxY-minY;
+  const vW=window.innerWidth, vH=window.innerHeight-76;
+  zoom = Math.min(vW/cW, vH/cH, 1.2);
+  pan = { x:(vW-cW*zoom)/2-minX*zoom, y:76+(vH-cH*zoom)/2-minY*zoom };
+  render();
+}
+
+function zoomAt(mx,my,f) {
+  const nz = Math.max(0.15, Math.min(4, zoom*f));
+  pan = { x: mx-(mx-pan.x)*(nz/zoom), y: my-(my-pan.y)*(nz/zoom) };
+  zoom = nz; render();
+}
+function zoomIn() { zoomAt(window.innerWidth/2, window.innerHeight/2, 1.2); }
+function zoomOut() { zoomAt(window.innerWidth/2, window.innerHeight/2, 0.8); }
+
+svg.addEventListener('wheel', e => { e.preventDefault(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.1:0.9); }, {passive:false});
+svg.addEventListener('mousedown', e => { if (e.button===0) { panning=true; panStart={x:e.clientX-pan.x, y:e.clientY-pan.y}; hideCtx(); } });
+window.addEventListener('mousemove', e => { if (panning&&panStart) { pan={x:e.clientX-panStart.x, y:e.clientY-panStart.y}; render(); } });
+window.addEventListener('mouseup', () => { panning=false; panStart=null; });
+window.addEventListener('keydown', e => {
+  if (e.key==='f'||e.key==='F') fitAll();
+  if (e.key==='+'||e.key==='=') zoomIn();
+  if (e.key==='-') zoomOut();
+});
+
+// Tooltip
+function showTip(e, node) {
+  const tip = document.getElementById('tip');
+  document.getElementById('tip-label').textContent = 'INFO';
+  document.getElementById('tip-label').style.color = node.color;
+  document.getElementById('tip-text').textContent = node.desc;
+  tip.style.borderColor = node.color;
+  tip.style.left = (e.clientX + 12) + 'px';
+  tip.style.top = (e.clientY - 10) + 'px';
+  tip.style.display = 'block';
+}
+function hideTip() { document.getElementById('tip').style.display = 'none'; }
+
+// Context menu
+const ctx = document.getElementById('ctx');
+function showCtx(e, node) {
+  ctxNode = node;
+  document.getElementById('ctx-label').textContent = node.text;
+  document.getElementById('ctx-label').style.color = node.color;
+  ctx.style.left = e.clientX+'px';
+  ctx.style.top = e.clientY+'px';
+  ctx.style.display = 'block';
+}
+function hideCtx() { ctx.style.display='none'; ctxNode=null; }
+document.getElementById('ctx-google').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-news').onclick = () => { window.open('https://www.google.com/search?q='+encodeURIComponent(ctxNode.text)+'&tbm=nws','_blank'); hideCtx(); };
+document.getElementById('ctx-wiki').onclick = () => { window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.getElementById('ctx-yt').onclick = () => { window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(ctxNode.text),'_blank'); hideCtx(); };
+document.addEventListener('click', e => { if (!ctx.contains(e.target)) hideCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('[data-id]')) e.preventDefault(); });
+
+// Minimap
+function updateMinimap() {
+  const mm = document.getElementById('mm-svg');
+  mm.innerHTML = '';
+  const MW=160,MH=100;
+  const xs=NODES.map(n=>n.x),ys=NODES.map(n=>n.y);
+  const minX=Math.min(...xs)-60,maxX=Math.max(...xs)+60;
+  const minY=Math.min(...ys)-60,maxY=Math.max(...ys)+60;
+  const cW=maxX-minX,cH=maxY-minY;
+  const sc=Math.min(MW/cW,MH/cH);
+  const toMM=(x,y)=>({x:(x-minX)*sc+(MW-cW*sc)/2, y:(y-minY)*sc+(MH-cH*sc)/2});
+  NODES.filter(n=>n.parentId).forEach(n=>{
+    const p=NODES.find(p=>p.id===n.parentId); if(!p) return;
+    const a=toMM(p.x,p.y),b=toMM(n.x,n.y);
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:n.color,'stroke-opacity':0.3,'stroke-width':1},mm);
+  });
+  NODES.forEach(n=>{ const p=toMM(n.x,n.y); el('circle',{cx:p.x,cy:p.y,r:n.parentId?2.5:4,fill:n.color,'fill-opacity':0.8},mm); });
+  const vpX=-pan.x/zoom, vpY=(-pan.y+76)/zoom;
+  const vpW=window.innerWidth/zoom, vpH=(window.innerHeight-76)/zoom;
+  const tl=toMM(vpX,vpY),br=toMM(vpX+vpW,vpY+vpH);
+  el('rect',{x:Math.max(0,tl.x),y:Math.max(0,tl.y),width:Math.max(4,br.x-tl.x),height:Math.max(4,br.y-tl.y),fill:'rgba(0,229,255,0.08)',stroke:'#00e5ff','stroke-width':1,'stroke-opacity':0.5,rx:2},mm);
+}
+
+renderTabsBar();
+fitAll();
+</script>
+</body>
+</html>
